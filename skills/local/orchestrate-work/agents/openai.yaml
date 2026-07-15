@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orchestrate Work"
+  short_description: "Plan, delegate, verify, and close work."
+  default_prompt: "Use $orchestrate-work to plan and execute this task with evidence-based delegation."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repo Practical Maintenance"
+  short_description: "Triage CI, reviews, docs, releases, and tests"
+  default_prompt: "Use $repo-practical-maintenance to triage this repo issue with focused evidence, a narrow fix, and verification."

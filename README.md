@@ -1,12 +1,12 @@
 # Agent Skills
 
-Private snapshot of the 129 agent skills active on this workstation on 2026-07-15.
+Private snapshot of the 136 agent skills active on this workstation on 2026-07-15.
 
 ## Contents
 
 - `skills/local/`: 104 user-managed Codex skills.
 - `skills/system/`: 6 skills bundled with Codex 0.144.4.
-- `skills/plugins/`: 19 skills from the active Browser, Visualize, GitHub, Ponytail, Documents, PDF, Presentations, Spreadsheets, and Template Creator plugins. Each plugin version is preserved in its path and its `plugin.json` is included when available.
+- `skills/plugins/`: 26 skills from the active Browser, I Have ADHD, Visualize, GitHub, Ponytail, Documents, PDF, Presentations, Spreadsheets, and Template Creator plugins. Each plugin version is preserved in its path and its `plugin.json` is included when available.
 - `SOURCES.md`: upstream repositories, versions, licenses, and locally authored exceptions.
 
 ## Restore

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Roadborne Blender Assets"
+  short_description: "Build verified Blender assets for Roadborne"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  default_prompt: "Use $roadborne-blender-assets to handle one authorized Roadborne Blender asset and verify its Godot handoff."
+policy:
+  allow_implicit_invocation: true

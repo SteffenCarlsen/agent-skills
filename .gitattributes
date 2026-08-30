@@ -1,0 +1,2 @@
+# Preserve installed snapshot bytes, including original line endings.
+skills/** -text

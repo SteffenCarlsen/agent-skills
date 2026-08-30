@@ -1,0 +1,4 @@
+interface:
+  display_name: "Roadborne Game Assets"
+  short_description: "Build and verify Roadborne art in Godot"
+  default_prompt: "Use $roadborne-game-assets to produce one authorized Roadborne visual slice and verify it in the actual Godot pipeline."

@@ -20,7 +20,7 @@ license: MIT
 
 # Code Testing Generation Skill
 
-An AI-powered skill that generates comprehensive, workable unit tests for any programming language using a coordinated multi-agent pipeline.
+Generate focused, workable tests for meaningful production behavior in any programming language. Use the coordinated pipeline when the scope benefits from it.
 
 ## When to Use This Skill
 
@@ -75,18 +75,19 @@ This skill coordinates multiple specialized agents in a **Research → Plan → 
 
 ### Step 1: Determine the user request
 
-Make sure you understand what user is asking and for what scope.
-When the user does not express strong requirements for test style, coverage goals, or conventions, source the guidelines from [unit-test-generation.prompt.md](unit-test-generation.prompt.md). This prompt provides best practices for discovering conventions, parameterization strategies, coverage goals (aim for 80%), and language-specific patterns.
+Establish the requested behavior and scope, then read the production code, relevant callers, and existing tests. Select cases from actual input/data flows, observed regressions, domain rules, and plausible failure modes. Reachable rare boundaries and security/error handling can matter; invented states that the supported flow cannot produce do not justify tests.
+
+Use [unit-test-generation.prompt.md](unit-test-generation.prompt.md) for conventions, test selection, and language-specific patterns. There is no default coverage percentage or test-count target. Honor explicitly requested targets and applicable required checks, but do not add tests, abstractions, or infrastructure solely to improve a metric. Stop when the scoped meaningful behaviors and risks have been checked.
 
 ### Step 2: Invoke the Test Generator
 
-Start by calling the `code-testing-generator` agent with your test generation request:
+For a small request, inspect the relevant flow and write the focused tests directly; skip sub-agents, phased plans, and `.testagent/` files. For larger independent work, use the available delegation tools and pass the same behavior-based scope and stopping rule to each agent. Where `code-testing-generator` is available, invoke it with:
 
 ```text
 Generate unit tests for [path or description of what to test], following the [unit-test-generation.prompt.md](unit-test-generation.prompt.md) guidelines
 ```
 
-The Test Generator will manage the entire pipeline automatically.
+The following phases describe the larger-scope pipeline; they are not mandatory ceremony for every request.
 
 ### Step 3: Research Phase (Automatic)
 
@@ -94,7 +95,8 @@ The `code-testing-researcher` agent analyzes your codebase to understand:
 
 - **Language & Framework**: Detects C#, TypeScript, Python, Go, Rust, Java, etc.
 - **Testing Framework**: Identifies MSTest, xUnit, Jest, pytest, go test, etc.
-- **Project Structure**: Maps source files, existing tests, and dependencies
+- **Production Behavior**: Traces relevant callers, input/data flows, existing assertions, and failure modes worth protecting
+- **Project Structure**: Maps relevant source files, existing tests, and dependencies
 - **Build Commands**: Discovers how to build and test the project
 
 Output: `.testagent/research.md`
@@ -104,9 +106,9 @@ Output: `.testagent/research.md`
 The `code-testing-planner` agent creates a structured implementation plan:
 
 - Groups files into logical phases (2-5 phases typical)
-- Prioritizes by complexity and dependencies
-- Specifies test cases for each file
-- Defines success criteria per phase
+- Prioritizes plausible regressions and consequences, accounting for dependencies
+- Specifies meaningful behavior and the production path each proposed test exercises; do not require a test for every file or method
+- Defines scoped success criteria and a stopping point per phase
 
 Output: `.testagent/plan.md`
 
@@ -114,8 +116,8 @@ Output: `.testagent/plan.md`
 
 The `code-testing-implementer` agent executes each phase sequentially:
 
-1. **Read** source files to understand the API
-2. **Write** test files following project patterns
+1. **Read** source files and relevant callers to establish the intended behavior
+2. **Write** tests that execute the actual production implementation and assert meaningful outcomes; mock external dependencies when useful, not the behavior under test
 3. **Build** using the `code-testing-builder` sub-agent to verify compilation
 4. **Test** using the `code-testing-tester` sub-agent to verify tests pass
 5. **Fix** using the `code-testing-fixer` sub-agent if errors occur
@@ -124,6 +126,8 @@ The `code-testing-implementer` agent executes each phase sequentially:
 Each phase completes before the next begins, ensuring incremental progress.
 
 ### Coverage Types
+
+Choose the applicable cases from the real contract and reachable inputs; this is a menu, not a checklist for every method.
 
 - **Happy path**: Valid inputs produce expected outputs
 - **Edge cases**: Empty values, boundaries, special characters
@@ -149,17 +153,17 @@ The generator picks a strategy based on request scope:
 |---|---|---|
 | "Generate tests for `src/services/UserService.ts`" | **Direct** | Single file, small scope — write tests immediately, skip sub-agents |
 | "Add unit tests for my billing project" | **Single pass** | Moderate scope — one Research → Plan → Implement cycle covers it |
-| "Achieve 80% coverage across the entire solution" | **Iterative** | Large scope — multiple R→P→I cycles, each narrowing remaining gaps |
+| "Achieve 80% coverage across the entire solution" | **Iterative, explicitly requested target** | Select meaningful remaining risks; report if the metric would require low-value padding instead of inventing tests |
 
 ### Pipeline Walkthrough
 
-Given a request like *"Generate unit tests for my InvoiceService"*, the pipeline produces:
+For a request spanning several related services, the pipeline can produce:
 
 1. **Research** → `.testagent/research.md` containing detected language/framework, build commands, files to test ranked by priority, and existing test inventory
 2. **Plan** → `.testagent/plan.md` containing phased approach with specific methods and test scenarios (happy path, edge cases, error cases) for each file
 3. **Implement** → Test files written, built, and verified per phase. Fix cycle runs automatically if build/test errors occur
-4. **Validate** → Full workspace build + full test run to catch cross-project issues
-5. **Report** → Summary of tests created, pass/fail counts, coverage notes, and next steps
+4. **Validate** → Run the relevant tests and applicable required checks; broaden only for affected integrations, failures, or unresolved risks
+5. **Report** → Behaviors protected, checks actually run and their outcomes, and material limits; report coverage metrics only when requested or required
 
 ### Language-Specific Examples
 
@@ -184,21 +188,19 @@ The `code-testing-extensions` skill provides concrete, filled-in examples for ea
 
 - Project must have a build/test system configured
 - Testing framework should be installed (or installable)
-- VS Code with GitHub Copilot extension
+- A local build/test environment; named agents are optional, and these roles can be handled directly or through available delegation tools
 
 ## Troubleshooting
 
 ### Tests don't compile
 
-The `code-testing-fixer` agent will attempt to resolve compilation errors. Check `.testagent/plan.md` for the expected test structure. Call the `code-testing-extensions` skill and read the language-specific extension file for error code references (e.g., `dotnet.md` for .NET).
+Resolve compilation errors directly or through an available fixer agent. Check `.testagent/plan.md` if the pipeline created it. Use `code-testing-extensions` for language-specific error references when needed (e.g., `dotnet.md` for .NET).
 
 ### Tests fail
 
-Most failures in generated tests are caused by **wrong expected values in assertions**, not production code bugs:
-
 1. Read the actual test output
-2. Read the production code to understand correct behavior
-3. Fix the assertion, not the production code
+2. Compare the production code, callers, and intended contract to distinguish a test mistake from a production defect
+3. Correct faulty tests; report a production defect or fix it only within authorized scope. Do not change a valid expectation merely to make current behavior pass
 4. Never mark tests `[Ignore]` or `[Skip]` just to make them pass
 
 ### Wrong testing framework detected
@@ -207,8 +209,8 @@ Specify your preferred framework in the initial request: "Generate Jest tests fo
 
 ### Environment-dependent tests fail
 
-Tests that depend on external services, network endpoints, specific ports, or precise timing will fail in CI environments. Focus on unit tests with mocked dependencies instead.
+Isolate external dependencies when they make a focused check unreliable. A local integration check is appropriate when the relevant behavior crosses that boundary; "real behavior" does not require live production services. Do not replace the production implementation with mocks that merely confirm their own setup.
 
 ### Build fails on full solution
 
-During phase implementation, build only the specific test project for speed. After all phases, run a full non-incremental workspace build to catch cross-project errors.
+Build and test the affected project first. Run a broader build only when project dependencies, a failure, an unresolved concern, or an applicable requirement justifies it; unrelated workspace failures are not permission to expand scope.

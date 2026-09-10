@@ -57,20 +57,16 @@ Default layout:
 
 When the user explicitly asks for `$goal`, `/goal mode`, `start a goal`, `continue this goal`, `goal ledger`, or equivalent goal-mode language, and the runtime exposes a native goal tool (for example Codex `/goal`), use it.
 
-Default sequence:
+1. Read the existing native goal with `get_goal` when available, then locate its matching ledger before creating files.
+2. Keep an existing unfinished native goal. Use `create_goal` only for an explicitly requested goal when the tool permits creation; include the known absolute ledger path in the objective. Set a token budget only when the user requested one.
+3. Follow the tools actually exposed: `update_goal` changes completion or blocked status; it cannot edit the objective, pause, resume, or change budgets. Do not recreate a goal to repair a stale badge or add a missing ledger pointer. Record the association in `GOAL.md` and the resume notes instead.
+4. Mark the native goal complete only when its objective is finished and verified. Mark it blocked only when the native tool's stated blocking conditions are met; a local blocked item alone does not establish that the whole goal is blocked.
 
-1. Create or locate the file ledger first so the ledger path is known.
-2. Call the native goal tool to create the runtime goal if no active native goal exists.
-3. Put the absolute ledger path directly in the native goal objective using the wording from `Goal Mode Coupling`.
-4. Keep `implementation-notes.html` current at checkpoints, before compaction, and before final handoff.
-5. Append a new event into the `progressEvents` array inside the HTML at each checkpoint.
-6. Mark the native goal complete only when the objective is actually finished and verified.
-
-Create a native runtime goal only when the user asks for goal mode. When a native runtime goal already exists, keep that goal and update the file ledger. When native goal tools are unavailable, continue with the file ledger and report that runtime coupling could not be created.
+When native goal tools are unavailable or an unrelated unfinished native goal prevents coupling, record that limitation and continue authorized work in its matching file ledger. Do not replace an unrelated goal or infer that a running task means its native goal is active.
 
 ## Starting A Goal
 
-1. Define finishing criteria before implementation.
+1. Locate any existing ledger using `Resuming A Goal` below and resume it if found. Use the following steps only for a new goal, with finishing criteria defined before implementation.
 2. Pick a stable `goal-id`: lowercase words, date when useful, no spaces.
 3. Create the ledger with `scripts/init_goal_ledger.py`:
 
@@ -85,19 +81,26 @@ uv run scripts/init_goal_ledger.py \
 
 Use `--mode full` for multi-step goals. Full mode uses the same simplified file layout. Add `--parent "<previous-goal-id>"` when this goal became possible because another goal completed.
 
-When the script is unavailable, create the same files manually.
+The initializer preserves existing ledger files and an existing index entry; rerunning it does not resume or reactivate a completed goal. When the script is unavailable, create only the missing files manually.
+
+## Resuming A Goal
+
+1. Follow the ledger path in the current task or native objective. If absent or stale, inspect the relevant project's `.agent/GOALS.md` and search that project for `GOAL.md` and `implementation-notes.html`. Reuse the established canonical ledger, including a legacy location; do not start another ledger just because the working directory or task changed.
+2. Read the contract and `Resume Here`, preserving the user's objective, settled decisions, protected paths, and authorization boundaries. Verify the current workspace and relevant evidence needed for the next action; recorded progress is a checkpoint, not proof of current runtime or deployment state.
+3. Reconcile the file ledger, native goal state, and actual work explicitly. Correct stale notes from evidence without discarding history or changing the user's goal. If an index entry is missing, restore it from the existing ledger's status rather than initializing it as active.
+4. Continue the next authorized action. Ask only if competing ledgers or contradictory instructions leave the intended goal or a consequential decision unresolved; continue independent work meanwhile.
 
 ## Goal Mode Coupling
 
-When creating or updating the matching `/goal`, include this ledger pointer in the goal objective:
+When creating the matching native goal, include this ledger pointer in the goal objective:
 
 ```text
 Maintain the agent-owned ledger at <absolute-or-project-relative-ledger-path> and keep implementation-notes.html current at checkpoints, before compaction, and before final handoff.
 ```
 
-Why: compaction and resumes may preserve the active goal text while dropping conversation context. The active goal must tell the next agent where the ledger lives and that updating the canonical state file is part of the goal.
+This keeps the ledger path and maintenance requirement available when compaction preserves the native objective but drops conversation context.
 
-The helper script writes a `Goal Mode Coupling` section into `GOAL.md`. Copy that line into the actual runtime goal objective when creating or updating the native goal.
+The helper script writes a `Goal Mode Coupling` section into `GOAL.md`. Copy that line when creating the native goal. Preserve an existing objective when the tool cannot edit it.
 
 ## Implementation Notes
 
@@ -145,7 +148,7 @@ Before compaction, interruption, or a long handoff:
 2. Append a checkpoint event into the inline `progressEvents` array.
 3. Record current phase, completed work, active work, blockers, next exact action, validation state, and protected paths.
 4. Link any bulky proof files from `evidence/`.
-5. If native goal mode is active, make sure the runtime objective still points at this ledger path.
+5. Record the native goal association and any status mismatch in the resume notes. Keep using the established ledger even when its pointer cannot be added to an existing native objective.
 
 The next agent should be able to resume from `GOAL.md` and `implementation-notes.html` without needing the full conversation.
 
@@ -155,7 +158,7 @@ When one goal unlocks another, link them explicitly:
 
 - In the new `GOAL.md`, set `Parent goal: <goal-id>`.
 - In the old `implementation-notes.html`, add `Next goal candidate: <goal-id>`.
-- In `.agent/GOALS.md`, append both goals with status and relationship.
+- In `.agent/GOALS.md`, keep one entry per goal with its current status and relationship; update existing entries instead of appending duplicates.
 
 Why: chained work loses context fast. The relationship is often more important than the individual tasks because it explains why the next goal exists now.
 
@@ -190,13 +193,9 @@ Every serious goal must include an escape hatch in `GOAL.md`:
 ```md
 ## Escape Hatch
 
-Pause, ask the user, or mark a scoped item `[blocked]` / `[incomplete]` if:
-- validation contradicts the goal
-- the goal requires a scope change
-- the agent is looping without measurable progress
-- the next step risks deleting or rewriting durable memory
-- the PRD and actual repo disagree
-- the ledger itself contaminates validation
+If validation fails, the repo disagrees with the plan, progress stalls, or the ledger affects validation, investigate and correct the recoverable issue within the existing scope. Record what changed and continue.
+
+Ask the user only when progress requires a scope or product decision, destructive changes to durable state, missing authorization, or information that cannot be established from available evidence. Mark the affected item `[blocked]` / `[incomplete]` with the reason and continue independent authorized work. Do not silently relax finishing criteria or overwrite history to make the ledger look complete.
 ```
 
 The escape hatch is the honesty path for impossible, contradictory, or scope-changing checkpoints.
@@ -205,7 +204,7 @@ The escape hatch is the honesty path for impossible, contradictory, or scope-cha
 
 Update `implementation-notes.html` when reality changes:
 
-- after a validation command
+- after validation establishes or changes a relevant result
 - after a meaningful implementation checkpoint
 - before handing off to another agent
 - before compaction
@@ -213,6 +212,8 @@ Update `implementation-notes.html` when reality changes:
 - when the next goal becomes obvious
 
 Append a single event into the inline `progressEvents` array at the same checkpoints. Write compact events. The ledger is a state surface plus a durable progress log, not a transcript.
+
+Choose checks that establish the requested behavior or catch a plausible regression in actual code. A coverage percentage is not a finishing criterion unless the user explicitly chose it; do not invent unrealistic scenarios or expand testing after sufficient evidence is available.
 
 ## Finishing A Goal
 

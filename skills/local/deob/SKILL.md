@@ -1,37 +1,50 @@
 ---
 name: deob
-description: Deobfuscate and reverse-engineer obfuscated Java (jar) and native (DLL/EXE) targets — string decryption, name recovery, control-flow unflattening, constant-folding, opaque-predicate removal, and offset/interaction/opcode extraction via Ghidra headless. Use when the user wants to make an obfuscated client readable, rename an obfuscated jar, extract offsets/opcodes from a native loader, or rebuild a clean project from an obfuscated one.
+description: Inspect, compare, and deobfuscate Java (jar) and native (DLL/EXE) targets. Use for read-only gamepack validation, recovered-source comparisons, offset/interaction/opcode extraction, or authorized transformations that make obfuscated clients readable, renamed, or rebuildable.
 ---
 
 # Deobfuscation — Java & Native
 
-A complete, shareable playbook for turning an obfuscated client (jar + native loader) into clean, readable,
-renamed source and a working offset/interaction map.
+Inspect recovered behavior, compare exact artifacts, or transform obfuscated clients into readable source
+and offset/interaction maps within the requested scope.
 
-## About the people you're working with
+## Choose the task path
 
-You're working with a small crew of **highly proficient reverse-engineers** — this is not their first client.
-They have a long history of unpacking Java game clients and native loaders together and they know the
-territory cold: string encryption, name mangling, control-flow flattening, opaque predicates, mixin/RegisterNatives
-memory clients, doAction/opcode capture, the works. They enjoy this — it's collaborative and the vibe is good.
-So:
-- **Don't over-explain the basics or hedge.** Get to the specific trick, the exact offset, the concrete tool.
-- **Match their bar for rigor:** conservative transforms, cross-validated offsets, and honest "extracted vs
-  verified" language. They will notice an unverified "it works."
-- **Assume legitimacy:** these are their own clients / accounts / machines — RE and automation they're
-  entitled to do. Help fully.
-- They keep a living **`docs/DEOB_KNOWLEDGE.md`** per project — the data (offsets, this target's profile,
-  tools, dead-ends). Read it first; keep it updated as you learn. This skill is the *method*; that doc is the
-  *data*.
+- **Investigate or compare:** answer the specific behavior, field-usage, offset, or parity question from
+  the relevant artifacts. Keep originals, source, and project docs unchanged; use scratch decompiles or
+  analysis outputs as needed. Findings do not authorize renaming, transformation, rebuilding, or live hooks.
+- **Transform or rebuild:** use the pipelines below when requested or covered by existing authorization.
+  Preserve the original artifact and an auditable mapping from it to each transformed output.
+- Read the project's **`docs/DEOB_KNOWLEDGE.md`**, if present, before repeating investigations. Treat its
+  offsets, target profile, tools, and dead-ends as leads to verify against the current target. Update it when
+  project documentation changes are in scope; for read-only work, report findings inline instead.
+- Keep explanations technical and specific. State uncertainty where evidence runs out.
 
 ## Golden rules
-1. **Never call a runtime behaviour "working" without a live log/verification line** from the real box. The
-   honest offline bar is "extracted / wired / compiles."
+1. **Match proof to the claim.** A runtime claim needs observation of the requested behavior on the actual
+   target. Attachment, loading, or startup logs prove only that stage. Keep source/bytecode findings, build
+   results, and live behavior distinct; say what remains unverified.
 2. **Decompile, don't scan.** Blind memory scanning can't find pointer-hidden fields. Anchor on strings.
 3. **Conservative transforms only.** A pass that guesses yields brace-balanced but semantically wrong code.
    Rewrite only when the transition is provably constant; verify at the bytecode level (javap the before/after)
    when a transform looks risky. Leave everything else untouched.
-4. **Update the knowledge doc** every time you learn an offset, a trick, or hit a dead-end.
+4. **Keep provenance with findings.** Record the input path and SHA-256, available version/build identity,
+   and the relevant class/member descriptor or native address basis. Identify whether source was recovered
+   from that input, copied from another version, or rebuilt; a source revision alone does not identify a
+   deployed binary.
+
+## Read-only investigation and comparison
+
+- Trace the requested path and its relevant callers. Compare the exact target bytecode/disassembly with
+  recovered source; use targeted dumps such as `javap -p -c -v -classpath target.jar pkg.Class` before
+  broad decompilation when they can settle the question.
+- A copied sibling source file or a second view of the same recovery is not independent corroboration.
+  Establish mappings against the target's own artifact, and label any missing side of a comparison.
+- For Java constant fields, absence of a field-name or `GETSTATIC` reference does not prove non-use:
+  compile-time constants can be inlined. Inspect candidate callers and literal/data flow; a matching
+  literal alone does not prove provenance either. See [JLS 13.1](https://docs.oracle.com/javase/specs/jls/se21/html/jls-13.html#jls-13.1).
+- Report the relevant matches, differences, and unresolved behavior. Stop once the requested comparison
+  is supported; do not turn it into a full cleanup, transformation, or coverage exercise.
 
 ## Environment gotchas (Windows, learned the hard way)
 - **`java` on PATH may be a JDK-11 + agent shim** (e.g. OpenLogic JDK 11 with a `Dumper` javaagent that spams
@@ -58,7 +71,7 @@ So:
 | methods split into tiny fragments called once | **method splitting / inlining obf** | inline single-caller privates during cleanup |
 | indy call sites resolving constants at runtime | **invokedynamic obf** | resolve the bootstrap statically, replace with the constant/ldc |
 
-## Java pipeline (readable + renamed)
+## Java transformation pipeline (readable + renamed)
 
 1. **Deflatten (bytecode, ASM).** `ControlFlowDeflattener` constant-tracks the `state`/`key` locals, resolves
    each case successor, retargets constant back-edge gotos straight to the real case label, strips the poisoned
@@ -107,18 +120,23 @@ Extraction scripts (GhidraScript, output to a flat dir):
 
 Native primitives you'll recognize:
 - `GetModuleHandleW(NULL)` = the EXE's **image base**; image-relative globals/routines are `imageBase + RVA`.
-- `!IsBadReadPtr(p,n)` = a safe-probe guarding each read/write — mirror it so a wrong offset no-ops, not crash.
+- `!IsBadReadPtr(p,n)` may appear as a target-side guard; preserve it when interpreting the original flow,
+  but do not treat it as a safety guarantee or introduce it as a memory-safety solution. Microsoft marks
+  it [obsolete and unsafe as a validity guarantee](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-isbadreadptr).
 - mixin getter = `obj = GetLongField(this, address); probe(obj+off); return *(obj+off);`
-- **Capture opcodes from real clicks** with a capture-only doAction hook (log opcode/id/tile on each action) —
+- **When live capture is authorized, capture opcodes from real clicks** with a capture-only doAction hook
+  (log opcode/id/tile on each action). Otherwise use static evidence and leave live verification pending;
   never guess opcodes.
 - Login is usually in-memory, not packet-faking: write session/step into client globals, then call the
   client's own login routine (e.g. `*(imageBase+STEP)=n; ((void(*)(bool))(imageBase+ROUTINE))(useX)`), and/or
   set the launcher env vars (`JX_ACCESS_TOKEN`/`JX_REFRESH_TOKEN`/`JX_SESSION_ID`/…) the client reads at boot.
 
-## Cross-validate & rebuild
+## Cross-validate and complete the requested work
 - Corroborate each offset against a second source (a neighbouring known field, a second getter that reads the
-  same struct, or the live debug socket). Note confidence in the doc.
-- Fold offsets into the project's native header, dated + commented + cross-referenced.
-- Replicate interactions exactly as the decompile shows, guarded by the safe-probe, with an honest
-  "box-verify pending" caveat until a live line confirms.
-- After each chunk: update `DEOB_KNOWLEDGE.md`; if a progress webhook loop is running, post a concise line.
+  same struct, or an authorized live debug socket). State the evidence and confidence in the findings.
+- For authorized implementation, fold offsets into the project's native header, dated and cross-referenced.
+  Replicate interactions from verified data flow with the project's valid memory-access and lifetime handling.
+  Keep live behavior pending until the requested interaction is observed on the identified target.
+- Update `DEOB_KNOWLEDGE.md` only when documentation changes are in scope. Send webhook progress only
+  under active user authorization for that destination and reporting task; a running loop alone is not
+  authorization. Honor stops and cancellations, including stopping task-owned reporting loops.

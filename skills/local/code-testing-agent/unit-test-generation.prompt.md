@@ -1,13 +1,12 @@
 ---
 description: >-
-  Best practices and guidelines for generating comprehensive,
-  parameterized unit tests with 80% code coverage across any programming
-  language
+  Guidelines for concise tests of relevant production behavior across
+  programming languages, following existing project conventions
 ---
 
 # Unit Test Generation Prompt
 
-You are an expert code generation assistant specialized in writing concise, effective, and logical unit tests. You carefully analyze provided source code, identify important edge cases and potential bugs, and produce minimal yet comprehensive and high-quality unit tests that follow best practices and cover the whole code to be tested. Aim for 80% code coverage.
+Write concise tests that protect relevant production behavior. Read the implementation and its callers, identify meaningful regressions and plausible failures, and use the smallest useful set of checks. There is no default coverage percentage or test-count goal. Follow explicitly requested targets and applicable required checks without padding the suite with low-value cases.
 
 ## Discover and Follow Conventions
 
@@ -25,10 +24,10 @@ If you identify a strong pattern, follow it unless the user explicitly requests 
 
 Generate concise, parameterized, and effective unit tests using discovered conventions.
 
-- **Prefer mocking** over generating one-off testing types
-- **Prefer unit tests** over integration tests, unless integration tests are clearly needed and can run locally
-- **Traverse code thoroughly** to ensure high coverage (80%+) of the entire scope
-- Continue generating tests until you reach the coverage target or have covered all non-trivial public surface area
+- **Exercise real production code** and assert its outputs, state changes, or required interactions; do not substitute the behavior under test with mocks or copied implementations
+- **Choose useful isolation**: mock external dependencies where helpful; use a local integration check when the risk lies at that boundary. Real behavior does not mean live production services
+- **Justify cases from the actual flow**: supported inputs, domain rules, observed regressions, reachable boundaries, and plausible dependency failures. Do not invent unreachable states merely to execute a branch
+- **Stop at the scoped risks** once relevant checks pass. Broaden only for an explicit goal, applicable requirement, or new evidence of a meaningful gap; do not generate infrastructure solely for coverage metrics
 
 ### Key Testing Goals
 
@@ -37,7 +36,7 @@ Generate concise, parameterized, and effective unit tests using discovered conve
 | **Minimal but Comprehensive** | Avoid redundant tests                                                                                |
 | **Logical Coverage**          | Focus on meaningful edge cases, domain-specific inputs, boundary values, and bug-revealing scenarios |
 | **Core Logic Focus**          | Test positive cases and actual execution logic; avoid low-value tests for language features          |
-| **Balanced Coverage**         | Don't let negative/edge cases outnumber tests of actual logic                                        |
+| **Risk-Based Selection**      | Choose happy paths, errors, and rare reachable boundaries by consequence and relevance, not a quota |
 | **Best Practices**            | Use Arrange-Act-Assert pattern and proper naming (`Method_Condition_ExpectedResult`)                 |
 | **Buildable & Complete**      | Tests must compile, run, and contain no hallucinated or missed logic                                 |
 
@@ -45,32 +44,31 @@ Generate concise, parameterized, and effective unit tests using discovered conve
 
 When the task specifies particular test scenarios or behaviors to cover:
 
-1. **Cover every stated requirement first** — each bullet point or scenario in the task description should map to at least one test
-2. **Test the actual implementation** — read the source code to understand return values, side effects, and error conditions before writing assertions
-3. **Fewer focused tests beat many shallow ones** — 5 tests that thoroughly exercise the function are better than 20 that only check surface behavior
-4. **Every test must pass** — run tests after writing them; fix immediately if they fail
+1. **Cover stated behavior** — use focused checks for the requested, testable requirements; one test may cover several related requirements
+2. **Test the actual implementation against its contract** — read the source and callers, and assert intended return values, side effects, or errors rather than copying implementation details into expectations
+3. **Prefer fewer focused tests** — skip trivial boilerplate, tests of the language/framework, and mocks asserting their own setup. Small unit tests remain useful when they protect meaningful behavior
+4. **Run the relevant tests** — investigate failures against the contract. Fix faulty tests; report or repair production defects within authorized scope, never rewrite a valid expectation just to obtain a pass
 
 ## Parameterization
 
 - Prefer parameterized tests (e.g., `[DataRow]`, `[Theory]`, `@pytest.mark.parametrize`) over multiple similar methods
 - Combine logically related test cases into a single parameterized method
-- Never generate multiple tests with identical logic that differ only by input values
+- Keep separate tests when they explain distinct behavior more clearly; parameterization is a convenience, not a goal
 
 ## Analysis Before Generation
 
 Before writing tests:
 
-1. **Analyze** the code line by line to understand what each section does
-2. **Document** all parameters, their purposes, constraints, and valid/invalid ranges
-3. **Identify** potential edge cases and error conditions
-4. **Describe** expected behavior under different input conditions
-5. **Note** dependencies that need mocking
-6. **Consider** concurrency, resource management, or special conditions
-7. **Identify** domain-specific validation or business rules
+1. **Trace** the relevant production paths, callers, and existing tests
+2. **Establish** expected behavior from the intended contract, actual inputs, and domain rules
+3. **Select** regressions and plausible failure modes that a test could catch, including trust-boundary validation and reachable rare cases where consequential
+4. **Choose** the smallest useful check and dependency isolation; reuse the existing harness
 
-Apply this analysis to the **entire** code scope, not just a portion.
+Do not require exhaustive parameter documentation or a test for every public method. Investigate concurrency, timing, and resource failures when the actual flow makes them relevant.
 
 ## Coverage Types
+
+Select relevant cases; do not automatically generate each category for every method.
 
 | Type                  | Examples                                                            |
 | --------------------- | ------------------------------------------------------------------- |
@@ -78,86 +76,6 @@ Apply this analysis to the **entire** code scope, not just a portion.
 | **Edge Cases**        | Empty values, boundaries, special characters, zero/negative numbers |
 | **Error Cases**       | Invalid inputs, null handling, exceptions, timeouts                 |
 | **State Transitions** | Before/after operations, initialization, cleanup                    |
-
-## Language-Specific Examples
-
-### C# (MSTest)
-
-```csharp
-[TestClass]
-public sealed class CalculatorTests
-{
-    private readonly Calculator _sut = new();
-
-    [TestMethod]
-    [DataRow(2, 3, 5, DisplayName = "Positive numbers")]
-    [DataRow(-1, 1, 0, DisplayName = "Negative and positive")]
-    [DataRow(0, 0, 0, DisplayName = "Zeros")]
-    public void Add_ValidInputs_ReturnsSum(int a, int b, int expected)
-    {
-        // Act
-        var result = _sut.Add(a, b);
-
-        // Assert
-        Assert.AreEqual(expected, result);
-    }
-
-    [TestMethod]
-    public void Divide_ByZero_ThrowsDivideByZeroException()
-    {
-        // Act & Assert
-        Assert.ThrowsException<DivideByZeroException>(() => _sut.Divide(10, 0));
-    }
-}
-```
-
-### TypeScript (Jest)
-
-```typescript
-describe("Calculator", () => {
-  let sut: Calculator;
-
-  beforeEach(() => {
-    sut = new Calculator();
-  });
-
-  it.each([
-    [2, 3, 5],
-    [-1, 1, 0],
-    [0, 0, 0],
-  ])("add(%i, %i) returns %i", (a, b, expected) => {
-    expect(sut.add(a, b)).toBe(expected);
-  });
-
-  it("divide by zero throws error", () => {
-    expect(() => sut.divide(10, 0)).toThrow("Division by zero");
-  });
-});
-```
-
-### Python (pytest)
-
-```python
-import pytest
-from calculator import Calculator
-
-class TestCalculator:
-    @pytest.fixture
-    def sut(self):
-        return Calculator()
-
-    @pytest.mark.parametrize("a,b,expected", [
-        (2, 3, 5),
-        (-1, 1, 0),
-        (0, 0, 0),
-    ])
-    def test_add_valid_inputs_returns_sum(self, sut, a, b, expected):
-        assert sut.add(a, b) == expected
-
-    def test_divide_by_zero_raises_error(self, sut):
-        with pytest.raises(ZeroDivisionError):
-            sut.divide(10, 0)
-```
 
 ## Output Requirements
 
@@ -170,13 +88,13 @@ class TestCalculator:
 ## Build and Verification
 
 - **Scoped builds during development**: Build the specific test project during implementation for faster iteration
-- **Final full-workspace build**: After all test generation is complete, run a full non-incremental build from the workspace root to catch cross-project errors
+- **Relevant verification**: Run the affected tests and applicable required checks. Broaden to a workspace build or wider suite only for affected integrations, failures, or unresolved risks
 - **API signature verification**: Before calling any method in test code, verify the exact parameter types, count, and order by reading the source code
 - **Project reference validation**: Before writing test code, verify the test project references all source projects the tests will use. Call the `code-testing-extensions` skill and read the language-specific extension file for guidance (e.g., `dotnet.md` for .NET)
 
 ## Test Scope Guidelines
 
-- **Write unit tests, not integration/acceptance tests**: Focus on testing individual classes and methods with mocked dependencies
-- **No external dependencies**: Never write tests that call external URLs, bind to network ports, require service discovery, or depend on precise timing
-- **Mock everything external**: HTTP clients, database connections, file systems, network endpoints — all should be mocked in unit tests
-- **Fix assertions, not production code**: When tests fail, read the production code, understand its actual behavior, and update the test assertion
+- Prefer deterministic unit tests for local logic; use a focused integration check where the relevant risk requires the real dependency boundary
+- Avoid live endpoints, credentials, fixed ports, and precise wall-clock timing unless the authorized task needs them. Temporary files or local services can be appropriate when they exercise relevant behavior
+- Mock external dependencies only where useful; keep the real production path under test
+- Report what executed and what remains unproven. Passing isolated tests do not establish live runtime or deployment behavior

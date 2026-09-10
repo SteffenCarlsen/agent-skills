@@ -72,7 +72,7 @@ Ledger path: `{relative_ledger_path}`
 
 ## Goal Mode Coupling
 
-When creating or updating the matching `/goal`, include this ledger pointer in the goal objective:
+When creating the matching native goal, include this ledger pointer in the goal objective. If its objective already exists and cannot be edited, preserve it and record the association here:
 
 `Maintain the agent-owned ledger at {absolute_ledger_path}/ and keep implementation-notes.html current at checkpoints, before compaction, and before final handoff.`
 
@@ -84,13 +84,9 @@ When creating or updating the matching `/goal`, include this ledger pointer in t
 
 ## Escape Hatch
 
-Pause, ask the user, or mark a scoped item `[blocked]` / `[incomplete]` if:
-- validation contradicts the goal
-- the goal requires a scope change
-- the agent is looping without measurable progress
-- the next step risks deleting or rewriting durable memory
-- the PRD and actual repo disagree
-- the ledger itself contaminates validation
+If validation fails, the repo disagrees with the plan, progress stalls, or the ledger affects validation, investigate and correct the recoverable issue within the existing scope. Record what changed and continue.
+
+Ask the user only when progress requires a scope or product decision, destructive changes to durable state, missing authorization, or information that cannot be established from available evidence. Mark the affected item `[blocked]` / `[incomplete]` with the reason and continue independent authorized work. Do not silently relax finishing criteria or overwrite history to make the ledger look complete.
 
 """,
     )
@@ -292,10 +288,11 @@ This file is the project-level index of active and completed agent goals. It rec
 |---|---|---|---|---|
 """,
         )
-    append_text(
-        goals_path,
-        f"| `{goal_id}` | active | {parent_line} | `.agent/runs/{goal_id}/` | {timestamp} |\n",
-    )
+    if not re.search(rf"(?m)^\s*\|\s*`?{re.escape(goal_id)}`?\s*\|", goals_path.read_text(encoding="utf-8")):
+        append_text(
+            goals_path,
+            f"| `{goal_id}` | active | {parent_line} | `.agent/runs/{goal_id}/` | {timestamp} |\n",
+        )
 
     print(run_dir)
     return 0

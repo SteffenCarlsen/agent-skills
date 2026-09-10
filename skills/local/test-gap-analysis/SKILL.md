@@ -12,15 +12,15 @@ Analyze .NET production code by reasoning about hypothetical mutations and check
 
 Code coverage tells you what code ran during tests. It does **not** tell you whether tests would fail if that code were wrong. A method can have 100% line coverage but zero tests that would catch a sign flip, an off-by-one error, or a removed null check.
 
-Pseudo-mutation analysis asks: _"If I changed this line, would any test fail?"_ When the answer is "no," you've found a test gap.
+Pseudo-mutation analysis asks: _"If this plausible defect changed relevant behavior, would an existing test fail?"_ An expected survivor is a candidate gap, not an automatic demand for another test.
 
 | Coverage Metric | What It Measures | What It Misses |
 |----------------|-----------------|----------------|
 | Line coverage | Which lines executed | Whether assertions verify those lines' behavior |
 | Branch coverage | Which branches taken | Whether both branches produce different asserted outcomes |
-| **Mutation score** | Whether tests detect code changes | Nothing — this is the gold standard |
+| **Executed mutation score** | Which generated mutations tests detected | Real-world relevance, equivalent mutations, and defects outside the mutation set |
 
-This skill performs **static pseudo-mutation** — reasoning about mutations without actually running them — to approximate mutation testing at the speed of code review.
+This skill performs **static pseudo-mutation**: verdicts are reasoned expectations, not executed results or a measured mutation score. Keep analysis read-only unless implementation is requested. There is no coverage percentage or mutation-count target; stop when the scoped meaningful risks have been assessed.
 
 ## When to Use
 
@@ -51,13 +51,13 @@ This skill performs **static pseudo-mutation** — reasoning about mutations wit
 
 ### Step 1: Gather production and test code
 
-Read both the production code and its corresponding test files. If the user points to a directory, identify production/test pairs by convention (e.g., `Calculator.cs` tested by `CalculatorTests.cs`).
+Read the production code, relevant callers, input/data flows, and corresponding tests. If the user points to a directory, use naming conventions to find candidates, then confirm the actual calls rather than assuming a filename proves coverage. Choose the scope from the request and relevant risks; do not default to an exhaustive repository audit.
 
 Establish which production methods are exercised by which test methods — trace this through method calls in test code, setup, and helper methods.
 
 ### Step 2: Identify mutation points
 
-Scan the production code and annotate every location where a mutation could reveal a test gap. Use the mutation catalog below.
+Select mutations that model plausible regressions in meaningful production behavior: domain rules, observed bugs, reachable boundaries, or consequential trust-boundary and dependency failures. The catalog below is a menu, not a requirement to enumerate every operator or method. Skip invented states that supported flows cannot reach; rare reachable security/error cases can still matter.
 
 #### Boundary Mutations
 
@@ -122,7 +122,6 @@ Scan the production code and annotate every location where a mutation could reve
 | `if (x != null) { ... }` | _(always enter block)_ | Null guard necessity |
 | `x ?? defaultValue` | `x` | Null coalescing coverage |
 | `x?.Method()` | `x.Method()` | Null-conditional coverage |
-| `x!` | `x` | Null-forgiving operator necessity |
 
 ### Step 3: Evaluate each mutation against tests
 
@@ -134,64 +133,53 @@ For each identified mutation point, reason about whether existing tests would de
 
 | Verdict | Meaning | Action |
 |---------|---------|--------|
-| **Killed** | At least one test would fail if this mutation were applied | No action needed — tests are effective here |
-| **Survived** | No test would fail — the mutation would go undetected | This is a test gap — recommend a test improvement |
-| **No coverage** | No test exercises this code path at all | Worse than survived — the code is untested |
-| **Equivalent** | The mutation produces identical behavior (e.g., `x * 1` → `x / 1`) | Skip — not a real mutation |
+| **Expected killed** | A traced test executes the relevant production path and asserts an outcome the mutation would change | Explain the assertion supporting this inference |
+| **Expected survived** | The inspected tests reach the path but appear to miss the changed behavior | Recommend improvement only if the behavior and risk justify it |
+| **No test path found** | No exercising test was found within the inspected scope | State the search scope; assess relevance rather than assuming severity |
+| **Equivalent** | The mutation preserves relevant observable behavior under the established contract | Skip; state the constraint supporting equivalence |
+| **Unknown** | Inputs, call paths, assertions, or runtime behavior cannot be established sufficiently | State what evidence would resolve it; do not count it as a gap or success |
 
 ### Step 4: Calibrate findings
 
 Before reporting, apply these calibration rules:
 
 - **Don't flag trivial code.** Simple property getters (`return _name;`), auto-properties, and boilerplate don't need mutation analysis. Focus on logic, conditions, calculations, and error handling.
-- **Consider defensive depth.** If a null guard has a survived mutation but the caller also checks for null, note the redundancy but rate it lower priority.
+- **Consider defensive depth and reachability.** Establish whether callers prevent the input and whether an external trust boundary still requires the guard. Do not create an impossible scenario solely to test a defensive branch.
 - **Equivalent mutations are not gaps.** If changing `>=` to `>` doesn't alter behavior because the `==` case is impossible given the domain, mark it Equivalent and skip.
-- **Private methods reached through public API are valid targets.** Trace through the call chain — a private method called from a tested public method may still have survived mutations if the test doesn't assert the specific behavior affected.
-- **Rate by risk, not count.** A single survived mutation in payment calculation logic is more important than five survived mutations in logging code.
+- **Private methods reached through public API are valid targets.** Trace through the call chain — a private method called from a tested public method may still have expected survivors if the test doesn't assert the specific behavior affected.
+- **Rate by relevant behavior and consequence, not count.** Explain the plausible input or regression and its observable effect. Unexecuted logging code is not automatically a higher priority than weakly asserted domain logic.
+- **Check what is really tested.** A test of a mock's configured return value or a copied implementation does not protect the production behavior. Recommend executing the real code, using mocks only for useful dependency isolation; meaningful unit tests do not require live services.
 
 ### Step 5: Report findings
 
-Present the analysis in this structure:
+Keep the report proportional to the request:
 
-1. **Summary** — Overall mutation score and key findings:
-   ```
-   | Metric              | Value    |
-   |---------------------|----------|
-   | Mutation points      | 42       |
-   | Killed               | 28 (67%) |
-   | Survived             | 10 (24%) |
-   | No coverage          | 2 (5%)   |
-   | Equivalent (skipped) | 2 (5%)   |
-   ```
+1. **Scope and conclusion** — State what was inspected, the important risks, and that verdicts are static expectations. Do not report a measured mutation score. Provide counts only if requested, labeled as counts of inspected hypotheses.
 
-2. **Survived Mutations (Test Gaps)** — For each survived mutation, report:
+2. **Relevant candidate gaps** — For each consequential expected survivor or missing test path, report:
    - **Location**: File, method, line
    - **Mutation category**: Boundary / Boolean / Return value / Exception / Arithmetic / Null-check
    - **Original code**: The current code
    - **Hypothetical mutation**: What would change
-   - **Why it survives**: Which tests cover this code and why their assertions miss it
-   - **Recommended fix**: A concrete test assertion or new test case that would kill this mutation
+   - **Real scenario and consequence**: How supported inputs or a plausible regression expose the changed behavior
+   - **Evidence and verdict**: Which tests exercise the real code and why their assertions appear to miss it; label uncertainty
+   - **Recommended check**: The smallest useful assertion or case that protects this behavior, reusing existing tests where practical
 
-   Group by priority: high-risk survived mutations first (business logic, calculations, security checks), lower-risk last (logging, formatting).
+   Group by the demonstrated consequence in this project, with the most relevant risks first.
 
-3. **No-Coverage Zones** — Code paths that no test reaches at all. These are worse than survived mutations.
+3. **Existing protection and limits** — Briefly note strong assertions, equivalent changes, unknowns, and material limits. No need to enumerate every expected killed mutation.
 
-4. **Killed Mutations (Strengths)** — Briefly note areas where tests are effective. Highlight well-tested methods and strong assertion patterns. Don't enumerate every killed mutation — summarize.
-
-5. **Recommendations** — Prioritized list:
-   - Which survived mutations to address first (by risk)
-   - Specific test methods to add or strengthen
-   - Patterns the team can adopt to prevent future gaps (e.g., always test boundary values, always assert exception types)
+4. **Recommendations** — Prioritize relevant checks by risk and combine cases that protect the same behavior. Do not prescribe tests for every mutation, all public methods, or a target percentage. Stop after the scoped risks are addressed; no automatic test-writing or infrastructure work follows a review.
 
 ## Validation
 
-- [ ] Every mutation point was classified (Killed / Survived / No coverage / Equivalent)
-- [ ] Every survived mutation includes the original code, the hypothetical change, and why tests miss it
-- [ ] Every survived mutation includes a concrete recommended fix (a test assertion or test case)
-- [ ] Equivalent mutations are correctly identified and excluded from the score
+- [ ] Reported verdicts are labeled as expected, equivalent, no test path found, or unknown; no executed mutation result is implied
+- [ ] Each recommended gap includes a reachable scenario or plausible regression, its consequence, and the evidence that existing assertions miss it
+- [ ] Each recommendation is a focused check of actual production behavior, not a test for its own sake
+- [ ] Equivalent or irrelevant mutations are excluded from recommendations
 - [ ] Trivial code (simple getters, auto-properties) is excluded from analysis
 - [ ] Findings are prioritized by risk, not just listed in source order
-- [ ] Report includes strengths (killed mutations) alongside gaps
+- [ ] Report notes existing protection and material uncertainties where relevant
 - [ ] Mutation categories are correctly labeled
 
 ## Common Pitfalls
@@ -202,7 +190,7 @@ Present the analysis in this structure:
 | Reporting equivalent mutations as gaps | If the mutation doesn't change behavior, it's not a gap — mark Equivalent |
 | Ignoring call chains | A private helper called from a tested public method is reachable — trace the chain |
 | Over-counting mutations in generated code | Skip auto-generated code, designer files, and migration files |
-| Recommending a new test for every survived mutation | Multiple survived mutations in the same method often share a single missing test — recommend one test that kills several |
-| Ignoring production context | A survived mutation in `ToString()` formatting is less important than one in `CalculateTotal()` — prioritize by business risk |
+| Recommending a new test for every expected survivor | Several mutations may share one meaningful missing check; low-value or unreachable cases may need none |
+| Ignoring production context | Prioritize the consequence and reachable flow, not the method name; formatting may matter when it defines a persisted or external contract |
 | Claiming 100% kill rate is required | Some mutations in low-risk code are acceptable to leave — acknowledge this in the report |
-| Not considering integration with other skills | If gaps are found, mention that `writing-mstest-tests` can help write the missing tests, and `test-anti-patterns` can audit existing test quality |
+| Treating static reasoning as execution evidence | Use expected/unknown verdicts and say what was inspected; executing ordinary tests would still not prove a mutation was killed |

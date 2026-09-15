@@ -1,16 +1,16 @@
 # Agent Skills
 
-Private archive of agent skills, last refreshed on 2026-08-31.
+Private archive of agent skills, last refreshed on 2026-09-15.
 
-The current local inventory contains **90 skills**: 26 user-managed, 6 system,
-and 58 plugin skills across 19 cached bundles. Installed or cached does not mean
+The current local inventory contains **88 skills**: 26 user-managed, 6 system,
+and 56 plugin skills across 17 cached bundles. Installed or cached does not mean
 enabled or available in every task. Older skills and plugin versions are retained.
 
 ## Contents
 
 - `skills/local/`: 26 current user-managed skills and 85 retained historical skills.
 - `skills/system/`: 6 system skill folders refreshed from the local Codex installation.
-- `skills/plugins/`: 58 current plugin skill copies and 26 older copies. Cache-version directories and bundled `plugin.json` metadata are preserved.
+- `skills/plugins/`: 56 current plugin skill copies. Cache-version directories and bundled `plugin.json` metadata are preserved alongside older snapshots.
 - `SOURCES.md`: current inventory, upstream provenance, licenses, and historical records.
 
 ## Restore

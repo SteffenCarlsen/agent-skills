@@ -1,12 +1,12 @@
 # Sources
 
-Last refresh: 2026-08-31.
+Last refresh: 2026-09-15.
 
 ## Current local inventory
 
-90 skill copies were found in the user skill directory, system skill directory,
+88 skill copies were found in the user skill directory, system skill directory,
 and canonical plugin-cache `skills/` directories: 26 user-managed, 6 system,
-and 58 plugin skills in 19 bundles. This is a local installation/cache inventory,
+and 56 plugin skills in 17 bundles. This is a local installation/cache inventory,
 not a claim that every skill is enabled or available in the current task.
 
 ### User-managed skills (26)
@@ -24,12 +24,33 @@ Copied from the current local `.system` directory. No Codex application version
 is inferred from these files. `review-agent` is present locally even though it
 is not exposed in the current task's skill catalog.
 
-### Plugin skills (58)
+### Plugin skills (56)
 
 The path preserves the cache directory identifier; it is not always the plugin's
-semantic version. The separately recorded version and license come from the
-copied `plugin.json`. Upstream links are local manifest metadata, not a fresh
-upstream-version check.
+semantic version. The copied `plugin.json` is the authoritative local record for
+each current bundle. This refresh did not check upstream for newer versions.
+
+| Snapshot | Marketplace | Skills |
+| --- | --- | ---: |
+| [i-have-adhd/0.3.0](skills/plugins/i-have-adhd/0.3.0) | i-have-adhd | 1 |
+| [computer-use/26.908.40834](skills/plugins/computer-use/26.908.40834) | openai-bundled | 1 |
+| [sites/0.1.70](skills/plugins/sites/0.1.70) | openai-bundled | 2 |
+| [visualize/1.0.37](skills/plugins/visualize/1.0.37) | openai-bundled | 1 |
+| [coderabbit/bd2122cb](skills/plugins/coderabbit/bd2122cb) | openai-curated | 1 |
+| [github/bd2122cb](skills/plugins/github/bd2122cb) | openai-curated | 4 |
+| [linear/bd2122cb](skills/plugins/linear/bd2122cb) | openai-curated | 1 |
+| [nvidia/bd2122cb](skills/plugins/nvidia/bd2122cb) | openai-curated | 11 |
+| [openai-templates/0.1.1](skills/plugins/openai-templates/0.1.1) | openai-curated-remote | 20 |
+| [plugin-management/0.1.0](skills/plugins/plugin-management/0.1.0) | openai-curated-remote | 1 |
+| [documents/26.909.12148](skills/plugins/documents/26.909.12148) | openai-primary-runtime | 1 |
+| [pdf/26.909.12148](skills/plugins/pdf/26.909.12148) | openai-primary-runtime | 1 |
+| [presentations/26.909.12148](skills/plugins/presentations/26.909.12148) | openai-primary-runtime | 1 |
+| [spreadsheets/26.909.12148](skills/plugins/spreadsheets/26.909.12148) | openai-primary-runtime | 2 |
+| [template-creator/26.909.12148](skills/plugins/template-creator/26.909.12148) | openai-primary-runtime | 1 |
+| [osrs-wiki-mcp/1.1.2](skills/plugins/osrs-wiki-mcp/1.1.2) | osrs-wiki | 1 |
+| [ponytail/4.10.0](skills/plugins/ponytail/4.10.0) | ponytail | 6 |
+
+### Previous plugin inventory (2026-08-31)
 
 | Snapshot | Marketplace | Manifest version | Skills | Origin | License recorded |
 | --- | --- | --- | ---: | --- | --- |
